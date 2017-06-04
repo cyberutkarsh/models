@@ -219,7 +219,7 @@ def _gather_clone_loss(clone, num_clones, regularization_losses):
     all_losses = []
     clone_losses = tf.get_collection(tf.GraphKeys.LOSSES, clone.scope)
     if clone_losses:
-      clone_loss = tf.add_n(clone_losses, name='clone_loss')
+      clone_loss = tf.add_n(clone_losses)
       if num_clones > 1:
         clone_loss = tf.div(clone_loss, 1.0 * num_clones,
                             name='scaled_clone_loss')
@@ -304,7 +304,7 @@ def optimize_clones(clones, optimizer,
       regularization_losses = None
   # Compute the total_loss summing all the clones_losses.
   total_loss = tf.add_n(clones_losses, name='total_loss')
-  # Sum the gradients across clones.
+  # Sum the gradients accross clones.
   grads_and_vars = _sum_clones_gradients(grads_and_vars)
   return total_loss, grads_and_vars
 
@@ -402,7 +402,8 @@ def deploy(config,
 
     if total_loss is not None:
       # Add total_loss to summary.
-      summaries.add(tf.summary.scalar('total_loss', total_loss))
+      summaries.add(tf.summary.scalar('total_loss', total_loss,
+                                      name='total_loss'))
 
     if summaries:
       # Merge all summaries together.

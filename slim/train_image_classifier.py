@@ -118,6 +118,8 @@ tf.app.flags.DEFINE_float(
     'momentum', 0.9,
     'The momentum for the MomentumOptimizer and RMSPropOptimizer.')
 
+tf.app.flags.DEFINE_float('rmsprop_momentum', 0.9, 'Momentum.')
+
 tf.app.flags.DEFINE_float('rmsprop_decay', 0.9, 'Decay term for RMSProp.')
 
 #######################
@@ -302,13 +304,22 @@ def _configure_optimizer(learning_rate):
     optimizer = tf.train.RMSPropOptimizer(
         learning_rate,
         decay=FLAGS.rmsprop_decay,
-        momentum=FLAGS.momentum,
+        momentum=FLAGS.rmsprop_momentum,
         epsilon=FLAGS.opt_epsilon)
   elif FLAGS.optimizer == 'sgd':
     optimizer = tf.train.GradientDescentOptimizer(learning_rate)
   else:
     raise ValueError('Optimizer [%s] was not recognized', FLAGS.optimizer)
   return optimizer
+
+
+def _add_variables_summaries(learning_rate):
+  summaries = []
+  for variable in slim.get_model_variables():
+    summaries.append(tf.summary.histogram(variable.op.name, variable))
+  summaries.append(tf.summary.scalar('training/Learning Rate', learning_rate))
+  return summaries
+
 
 def _get_init_fn():
   """Returns a function run by the chief worker to warm-start the training.
@@ -383,9 +394,9 @@ def main(_):
 
   tf.logging.set_verbosity(tf.logging.INFO)
   with tf.Graph().as_default():
-    #######################
-    # Config model_deploy #
-    #######################
+    ######################
+    # Config model_deploy#
+    ######################
     deploy_config = model_deploy.DeploymentConfig(
         num_clones=FLAGS.num_clones,
         clone_on_cpu=FLAGS.clone_on_cpu,
@@ -403,9 +414,9 @@ def main(_):
     dataset = dataset_factory.get_dataset(
         FLAGS.dataset_name, FLAGS.dataset_split_name, FLAGS.dataset_dir)
 
-    ######################
+    ####################
     # Select the network #
-    ######################
+    ####################
     network_fn = nets_factory.get_network_fn(
         FLAGS.model_name,
         num_classes=(dataset.num_classes - FLAGS.labels_offset),
@@ -458,12 +469,11 @@ def main(_):
       # Specify the loss function #
       #############################
       if 'AuxLogits' in end_points:
-        tf.losses.softmax_cross_entropy(
-            logits=end_points['AuxLogits'], onehot_labels=labels,
+        slim.losses.softmax_cross_entropy(
+            end_points['AuxLogits'], labels,
             label_smoothing=FLAGS.label_smoothing, weights=0.4, scope='aux_loss')
-      tf.losses.softmax_cross_entropy(
-          logits=logits, onehot_labels=labels,
-          label_smoothing=FLAGS.label_smoothing, weights=1.0)
+      slim.losses.softmax_cross_entropy(
+          logits, labels, label_smoothing=FLAGS.label_smoothing, weights=1.0)
       return end_points
 
     # Gather initial summaries.
@@ -531,7 +541,7 @@ def main(_):
         clones,
         optimizer,
         var_list=variables_to_train)
-    # Add total_loss to summary.
+    #Add total_loss to summary.
     summaries.add(tf.summary.scalar('total_loss', total_loss))
 
     # Create gradient updates.
