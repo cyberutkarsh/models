@@ -31,7 +31,7 @@ slim = tf.contrib.slim
 
 _FILE_PATTERN = 'baggage_%s_*.tfrecord'
 
-SPLITS_TO_SIZES = {'train': 800, 'validation': 200}
+SPLITS_TO_SIZES = {'train': 5500, 'validation': 1500}
 
 _NUM_CLASSES = 2
 

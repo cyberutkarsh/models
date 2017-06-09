@@ -25,6 +25,8 @@ from datasets import dataset_factory
 from nets import nets_factory
 from preprocessing import preprocessing_factory
 
+import numpy as np
+
 slim = tf.contrib.slim
 
 tf.app.flags.DEFINE_integer(
@@ -81,6 +83,19 @@ tf.app.flags.DEFINE_integer(
 
 FLAGS = tf.app.flags.FLAGS
 
+def write_jpeg(data, filepath):
+    g = tf.Graph()
+    with g.as_default():
+        data_t = tf.placeholder(tf.uint8)
+        op = tf.image.encode_jpeg(data_t, format='rgb', quality=100)
+        init = tf.initialize_all_variables()
+
+    with tf.Session(graph=g) as sess:
+        sess.run(init)
+        data_np = sess.run(op, feed_dict={ data_t: data })
+
+    with open(filepath, 'w') as fd:
+        fd.write(data_np)
 
 def main(_):
   if not FLAGS.dataset_dir:
@@ -186,6 +201,35 @@ def main(_):
         eval_op=list(names_to_updates.values()),
         variables_to_restore=variables_to_restore)
 
+    classifier = tf.reshape(images,[-1, dataset.num_classes - FLAGS.labels_offset])
+    print("1")
+    correct_scores = tf.gather_nd(classifier,
+                                  tf.stack((tf.cast(tf.range(FLAGS.batch_size), tf.int64), labels), axis=1))
+    print("2")
+    scores = tf.nn.softmax_cross_entropy_with_logits(
+        _sentinel=None,
+        labels=labels,
+        logits=correct_scores,
+        dim=-1,
+        name=None
+    )
 
+    dcross_entropy_loss = tf.gradients(
+        scores,
+        images,
+        grad_ys=None,
+        name='gradients',
+        colocate_gradients_with_ops=False,
+        gate_gradients=False,
+        aggregation_method=None
+    )
+    print(dcross_entropy_loss)
+    #saliency = np.abs(np.amax(dcross_entropy_loss[0],3))
+    saliency = tf.abs(tf.reduce_max(dcross_entropy_loss[0], reduction_indices=[3]))
+    sals = tf.unstack(saliency,axis=0)
+    with tf.Session() as sess:
+      print(saliency.eval())
+    #write_jpeg(saliency[0].eval(), "./sal.jpeg")
+    
 if __name__ == '__main__':
   tf.app.run()
